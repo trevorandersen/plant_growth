@@ -1,0 +1,5 @@
+# pygame-ce (Community Edition) is a drop-in replacement for pygame: the code
+# still says "import pygame". It has ready-made installs for newer Python
+# versions, where plain "pip install pygame" often fails.
+# If plain pygame is already installed, remove it first: pip uninstall pygame
+pygame-ce>=2.5

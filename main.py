@@ -5,15 +5,18 @@ Pick a kind of plant on the left, then press "Grow one step" (or Space)
 to grow it from a seed to a mature plant.
 
 Files:
-    parts.py   Roots, Stem, Leaves, Flowers, Berries (and their base classes)
+    parts.py   Roots, Stem, Leaf, Flower, Berry (and their base classes)
     plants.py  Plant and its subclasses, each with its own grow(step)
     main.py    this file: the window, buttons and drawing
 
-Run with:  python main.py
+Run with:
+    pip install -r requirements.txt
+    python main.py
 """
 
 import random
 import sys
+from collections import Counter
 
 import pygame
 
@@ -208,11 +211,17 @@ class App:
         if filled.width:
             pygame.draw.rect(self.screen, ACCENT, filled, border_radius=4)
 
-        # Every part answers describe() in its own way.
-        y = top + 46
+        # Every part answers describe() in its own way. Parts of the same class
+        # are grouped, e.g.  Leaf   8 × 52 px long,  2 × 35 px long
+        groups = {}
         for part in plant.parts():
-            self.text(type(part).__name__, (left, y + 1), self.code_font, MUTED)
-            self.text(part.describe(), (left + 140, y), self.font)
+            groups.setdefault(type(part).__name__, []).append(part)
+        y = top + 46
+        for class_name, parts in groups.items():
+            counts = Counter(part.describe() for part in parts)
+            summary = ",  ".join(text if n == 1 else f"{n} × {text}" for text, n in counts.items())
+            self.text(class_name, (left, y + 1), self.code_font, MUTED)
+            self.text(summary, (left + 140, y), self.font)
             y += 20
 
         self.text(self.message, (left, INFO.bottom - 24), self.code_font, ACCENT)

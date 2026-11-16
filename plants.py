@@ -2,12 +2,16 @@
 plants.py - the different kinds of plant.
 
 INHERITANCE
-    Plant                   the base class: has Roots, Stem, Leaves, Flowers, Berries
+    Plant                   the base class
     ├── Sunflower
     ├── Tomato
     │   └── CherryTomato    inherits from Tomato, which inherits from Plant
     ├── Strawberry
     └── BlueberryBush
+
+COMPOSITION
+    Every Plant HAS one Roots and one Stem, plus LISTS of Leaf, Flower
+    and Berry objects that grow over time.
 
 POLYMORPHISM
     Every kind of plant has a grow(step) method, but each one grows differently.
@@ -16,11 +20,13 @@ POLYMORPHISM
         plant.grow(step)
 
     and Python picks the right grow() for whatever kind of plant it is.
+    Plants also override new_leaf(), new_flower() and new_berry() to choose
+    which kind of Leaf, Flower and Berry they make.
 """
 
 import pygame
 
-from parts import Roots, Stem, Leaves, Flowers, SunflowerHead, Berries, Strawberries
+from parts import Roots, Stem, Leaf, Flower, SunflowerHead, Berry, StrawberryFruit
 
 
 def progress(step, start, end):
@@ -39,7 +45,7 @@ def progress(step, start, end):
 class Plant:
     """Base class for every plant.
 
-    A Plant HAS-A Roots, Stem, Leaves, Flowers and Berries (composition).
+    A Plant HAS-A Roots and a Stem, and lists of Leaf, Flower and Berry (composition).
     A Sunflower IS-A Plant (inheritance).
     """
 
@@ -55,22 +61,62 @@ class Plant:
         self.step = 0
         self.roots = Roots()
         self.stem = Stem()
-        self.leaves = Leaves()
-        self.flowers = Flowers()
-        self.berries = Berries()
+        self.leaves = []        # Leaf objects
+        self.flowers = []       # Flower objects
+        self.berries = []       # Berry objects
 
     def parts(self):
-        """All the parts, in the order they should be drawn (back to front)."""
-        return [self.roots, self.stem, self.leaves, self.flowers, self.berries]
+        """Every part, in the order they should be drawn (back to front)."""
+        return [self.roots, self.stem] + self.leaves + self.flowers + self.berries
+
+    # ---- Which kind of leaf, flower and berry this plant makes.
+    # ---- Subclasses override these to make their own kinds.
+
+    def new_leaf(self):
+        return Leaf()
+
+    def new_flower(self):
+        return Flower()
+
+    def new_berry(self):
+        return Berry()
+
+    # ---- Helpers the subclasses use in grow()
+
+    def add_leaves(self, count):
+        for _ in range(count):
+            leaf = self.new_leaf()
+            leaf.spot = self.stem.spot_for(len(self.leaves), *leaf.zone)
+            self.leaves.append(leaf)
+
+    def add_flowers(self, count):
+        for _ in range(count):
+            flower = self.new_flower()
+            index = len(self.flowers) + len(self.berries)  # berries took the old flowers' spots
+            flower.spot = self.stem.spot_for(index, *flower.zone)
+            self.flowers.append(flower)
+
+    def flowers_become_berries(self):
+        """Each flower that has finished blooming turns into a berry in the same spot."""
+        for flower in list(self.flowers):
+            if flower.is_finished():
+                berry = self.new_berry()
+                berry.spot = flower.spot
+                self.flowers.remove(flower)
+                self.berries.append(berry)
+
+    # ---- Growing
 
     def grow(self, step):
         """Grow the plant to `step` (1 to max_steps).
 
-        Roots grow the same way in every plant, so that code lives here.
-        Subclasses override grow() and call super().grow(step) to keep it.
+        The things every plant does live here. Subclasses override grow()
+        and call super().grow(step) first, then add their own growth.
         """
         self.roots.depth = self.max_root_depth * progress(step, 0, self.max_steps - 2)
         self.roots.branches = round(self.max_root_branches * progress(step, 1, self.max_steps - 2))
+        for part in self.parts():
+            part.grow()        # <-- polymorphism: each leaf, flower and berry grows its own way
 
     def grow_one_step(self):
         """Move on to the next step, unless the plant is already fully grown."""
@@ -90,11 +136,13 @@ class Plant:
             return "Mature"
         if not self.stem.is_present():
             return "Germinating"
-        if self.berries.is_present():
+        if self.berries:
             return "Fruiting"
-        if self.flowers.is_present():
-            return "Flowering" if self.flowers.bloom > 0 else "Budding"
-        if self.leaves.count <= 2:
+        if self.flowers:
+            if any(flower.bloom > 0 for flower in self.flowers):
+                return "Flowering"
+            return "Budding"
+        if len(self.leaves) <= 2:
             return "Sprout"
         return "Growing"
 
@@ -120,26 +168,24 @@ class Sunflower(Plant):
     seed_colour = (70, 70, 70)
     seed_size = 7
 
-    def __init__(self):
-        super().__init__()
-        self.flowers = SunflowerHead()     # a special kind of Flowers
-        self.leaves.width = 0.75
-        self.leaves.colour = (70, 150, 50)
+    def new_leaf(self):
+        return Leaf(full_size=52, width=0.75, colour=(70, 150, 50))
+
+    def new_flower(self):
+        return SunflowerHead()             # a special kind of Flower
 
     def grow(self, step):
-        super().grow(step)                 # roots grow like any plant's
+        super().grow(step)                 # roots grow, and every part grows a bit
         # One tall, thick stem with no branches.
         self.stem.height = 300 * progress(step, 1, 7)
         self.stem.thickness = 3 + step
-        # Two more big leaves every step.
-        self.leaves.count = min(12, 2 * (step - 1))
-        self.leaves.size = 20 + 4 * step
-        # A single giant flower head that opens from step 5 to step 7.
-        if step >= 5:
-            self.flowers.count = 1
-            self.flowers.size = 50
-            self.flowers.bloom = progress(step, 5, 7)
-        # Sunflowers make seeds, not berries, so berries stay at 0.
+        # Two new leaves every step until there are 12.
+        if step >= 2 and len(self.leaves) < 12:
+            self.add_leaves(2)
+        # A single giant flower head appears at step 5.
+        if step == 5:
+            self.add_flowers(1)
+        # Sunflowers make seeds, not berries, so flowers never become berries.
 
 
 class Tomato(Plant):
@@ -151,26 +197,30 @@ class Tomato(Plant):
     def __init__(self):
         super().__init__()
         self.stem.branch_angle = 50
-        self.flowers.petal_colour = (250, 215, 40)
-        self.flowers.centre_colour = (220, 160, 20)
-        self.berries.ripe_colour = (215, 40, 30)
+
+    def new_leaf(self):
+        return Leaf(full_size=34)
+
+    def new_flower(self):
+        flower = Flower(petal_colour=(250, 215, 40), centre_colour=(220, 160, 20))
+        flower.zone = (0.45, 1.0)          # flowers (and later fruit) all along the branches
+        return flower
+
+    def new_berry(self):
+        return Berry(full_size=11, ripe_colour=(215, 40, 30))
 
     def grow(self, step):
         super().grow(step)
-        # A bushy stem that sends out side branches from step 4.
+        # A bushy stem that sends out side branches from step 3.
         self.stem.height = 190 * progress(step, 1, 7)
         self.stem.thickness = 2 + step // 2
-        self.stem.branches = max(0, min(4, step - 3))
-        self.leaves.count = max(0, min(18, 2 * (step - 1)))
-        self.leaves.size = 14 + 2 * step
-        # Flowers come first, then turn into tomatoes.
-        #                 step: 0  1  2  3  4  5  6  7  8  9  10
-        self.flowers.count = [0, 0, 0, 0, 0, 5, 5, 3, 0, 0, 0][step]
-        self.berries.count = [0, 0, 0, 0, 0, 0, 0, 2, 5, 5, 5][step]
-        self.flowers.size = 12
-        self.flowers.bloom = 0.0 if step <= 5 else 1.0
-        self.berries.size = max(0, min(11, 2 * (step - 4)))
-        self.berries.ripeness = progress(step, 8, 10)  # green -> red
+        self.stem.branches = max(0, min(4, step - 2))
+        if step >= 2 and len(self.leaves) < 24:
+            self.add_leaves(3)
+        # Five flower buds at step 5. Once they finish blooming they turn into tomatoes.
+        if step == 5:
+            self.add_flowers(5)
+        self.flowers_become_berries()
 
 
 class CherryTomato(Tomato):
@@ -181,10 +231,15 @@ class CherryTomato(Tomato):
 
     name = "Cherry tomato"
 
+    def new_berry(self):
+        berry = super().new_berry()        # make a tomato like a Tomato does...
+        berry.full_size = 5                # ...but much smaller
+        return berry
+
     def grow(self, step):
         super().grow(step)                 # grow exactly like a Tomato...
-        self.berries.count *= 3            # ...but with three times as many fruit...
-        self.berries.size //= 2            # ...that are half the size
+        if step == 5:
+            self.add_flowers(10)           # ...with extra flowers, so extra fruit
 
 
 class Strawberry(Plant):
@@ -197,37 +252,42 @@ class Strawberry(Plant):
 
     def __init__(self):
         super().__init__()
-        self.berries = Strawberries()      # a special kind of Berries
         self.roots.style = "fibrous"
         # A short crown with leaf stalks fanning out from it.
         self.stem.branch_start = self.stem.branch_end = 0.5
         self.stem.branch_angle = 30
         self.stem.branch_fan = 25
         self.stem.branch_length = 2.0
-        self.leaves.leaflets = 3
-        self.leaves.width = 0.6
-        self.leaves.zone = (0.85, 1.0)
-        self.flowers.zone = (0.55, 0.7)
-        self.berries.zone = (0.5, 0.7)
+
+    def new_leaf(self):
+        leaf = Leaf(full_size=38, width=0.6, leaflets=3)
+        leaf.zone = (0.85, 1.0)            # leaves at the ends of the stalks
+        return leaf
+
+    def new_flower(self):
+        flower = Flower(size=14, open_steps=1)
+        flower.zone = (0.55, 0.7)          # flowers part-way along, so fruit hangs low
+        return flower
+
+    def new_berry(self):
+        return StrawberryFruit()           # a special kind of Berry
 
     def grow(self, step):
         super().grow(step)
         self.stem.height = 45 * progress(step, 1, 3)
         self.stem.branches = min(6, step)
-        self.leaves.count = min(7, step)
-        self.leaves.size = 14 + 3 * step
-        #                 step: 0  1  2  3  4  5  6  7  8
-        self.flowers.count = [0, 0, 0, 0, 3, 4, 2, 0, 0][step]
-        self.berries.count = [0, 0, 0, 0, 0, 0, 3, 4, 4][step]
-        self.flowers.size = 14
-        self.flowers.bloom = 0.0 if step <= 4 else 1.0
-        self.berries.size = 11
-        self.berries.ripeness = progress(step, 6, 8)   # white -> red
+        if step >= 2:
+            self.add_leaves(1)
+        if step == 3:
+            self.add_flowers(3)
+        if step == 4:
+            self.add_flowers(1)
+        self.flowers_become_berries()
 
 
 class BlueberryBush(Plant):
     name = "Blueberry bush"
-    max_steps = 10
+    max_steps = 11
     max_root_depth = 90
     max_root_branches = 12
     seed_colour = (110, 80, 60)
@@ -242,16 +302,20 @@ class BlueberryBush(Plant):
         self.stem.branch_angle = 35
         self.stem.branch_fan = 8
         self.stem.branch_length = 0.75
-        self.leaves.width = 0.45
-        self.leaves.colour = (50, 130, 80)
-        self.leaves.zone = (0.3, 0.95)
-        self.flowers.petal_colour = (255, 238, 242)
-        self.flowers.centre_colour = (225, 170, 185)
-        self.flowers.centre = 0.45
-        self.flowers.zone = (0.6, 1.0)
-        self.berries.unripe_colour = (170, 200, 120)
-        self.berries.ripe_colour = (55, 65, 150)
-        self.berries.zone = (0.5, 0.95)
+
+    def new_leaf(self):
+        leaf = Leaf(full_size=30, width=0.45, colour=(50, 130, 80))
+        leaf.zone = (0.3, 0.95)
+        return leaf
+
+    def new_flower(self):
+        flower = Flower(size=10, petal_colour=(255, 238, 242), centre_colour=(225, 170, 185),
+                        centre=0.45, open_steps=1)
+        flower.zone = (0.6, 1.0)
+        return flower
+
+    def new_berry(self):
+        return Berry(full_size=8, unripe_colour=(170, 200, 120), ripe_colour=(55, 65, 150))
 
     def grow(self, step):
         super().grow(step)
@@ -259,15 +323,14 @@ class BlueberryBush(Plant):
         self.stem.thickness = 2 + step // 2
         self.stem.branches = max(0, min(6, step - 2))
         self.stem.woody = step >= 4                    # green shoot -> brown bark
-        self.leaves.count = max(0, min(30, 3 * (step - 1)))
-        self.leaves.size = 12 + 2 * step
-        #                 step: 0  1  2  3  4  5  6  7   8   9  10
-        self.flowers.count = [0, 0, 0, 0, 0, 0, 8, 12, 6, 0, 0][step]
-        self.berries.count = [0, 0, 0, 0, 0, 0, 0, 6, 14, 18, 18][step]
-        self.flowers.size = 10
-        self.flowers.bloom = 0.0 if step <= 6 else 1.0
-        self.berries.size = 7
-        self.berries.ripeness = progress(step, 7, 10)  # green -> blue
+        if step >= 2 and len(self.leaves) < 36:
+            self.add_leaves(4)
+        # Two batches of flowers, so the berries ripen at different times.
+        if step == 6:
+            self.add_flowers(8)
+        if step == 7:
+            self.add_flowers(6)
+        self.flowers_become_berries()
 
 
 # The plants the user can choose from. Add a new class here and it appears in the menu.
