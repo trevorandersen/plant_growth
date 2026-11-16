@@ -7,7 +7,8 @@ INHERITANCE
     ├── Tomato
     │   └── CherryTomato    inherits from Tomato, which inherits from Plant
     ├── Strawberry
-    └── BlueberryBush
+    ├── BlueberryBush
+    └── RandomisedPlant     a different, made-up plant every time
 
 COMPOSITION
     Every Plant HAS one Roots and one Stem, plus LISTS of Leaf, Flower
@@ -23,6 +24,8 @@ POLYMORPHISM
     Plants also override new_leaf(), new_flower() and new_berry() to choose
     which kind of Leaf, Flower and Berry they make.
 """
+
+import random
 
 import pygame
 
@@ -333,5 +336,100 @@ class BlueberryBush(Plant):
         self.flowers_become_berries()
 
 
+def random_colour(rng, hue=(0, 360), saturation=(40, 100), value=(70, 100)):
+    """A random colour, picked by hue (0-360), saturation and brightness (0-100)."""
+    colour = pygame.Color(0)
+    colour.hsva = (rng.uniform(*hue), rng.uniform(*saturation), rng.uniform(*value), 100)
+    return (colour.r, colour.g, colour.b)
+
+
+class RandomisedPlant(Plant):
+    """A made-up plant whose features are chosen at random.
+
+    The rest of the program can't tell the difference: it still just calls
+    plant.grow(step) and plant.draw(...). That's polymorphism.
+
+    Every random choice comes from self.rng, which starts from `seed`, so
+    RandomisedPlant(seed=1234) grows into the same plant every time.
+    """
+
+    name = "Random plant"
+
+    def __init__(self, seed=None):
+        super().__init__()
+        if seed is None:
+            seed = random.randint(1000, 9999)
+        self.seed = seed
+        self.rng = rng = random.Random(seed)
+        self.name = f"Random plant #{seed}"    # this object's name hides the class's name
+
+        # These are class attributes in the other plants. Setting them on
+        # self gives THIS plant its own values.
+        self.max_steps = rng.randint(8, 12)
+        self.max_root_depth = rng.randint(60, 160)
+        self.max_root_branches = rng.randint(4, 12)
+        self.seed_colour = random_colour(rng, hue=(20, 50), value=(30, 80))
+        self.seed_size = rng.randint(3, 7)
+        self.roots.style = rng.choice(["tap", "fibrous"])
+
+        # Stem shape
+        self.stem_height = rng.randint(80, 300)
+        self.max_branches = rng.randint(0, 6)
+        self.stem.branch_angle = rng.randint(25, 60)
+        self.stem.branch_fan = rng.randint(0, 15)
+        self.stem.branch_length = rng.uniform(0.3, 0.8)
+        self.stem.branch_start = rng.uniform(0.1, 0.4)
+        self.stem.branch_end = rng.uniform(0.6, 0.85)
+        self.stem.colour = random_colour(rng, hue=(80, 130), saturation=(40, 70), value=(50, 65))
+        self.woody = rng.random() < 0.4
+
+        # Leaves
+        self.leaf_size = rng.randint(15, 50)
+        self.leaf_width = rng.uniform(0.3, 0.8)
+        self.leaflets = rng.choice([1, 1, 3])
+        self.leaf_colour = random_colour(rng, hue=(80, 150), saturation=(45, 75), value=(45, 70))
+        self.max_new_leaves = rng.randint(1, 4)
+        self.max_leaves = rng.randint(8, 30)
+
+        # Flowers: when they appear must leave time for berries to ripen
+        self.flower_open_steps = rng.randint(1, 2)
+        self.flower_step = rng.randint(3, self.max_steps - self.flower_open_steps - 3)
+        self.flower_count = rng.randint(1, 10)
+        self.flower_size = rng.randint(8, 22)
+        self.petals = rng.randint(4, 12)
+        self.petal_colour = random_colour(rng, saturation=(20, 90), value=(85, 100))
+        self.centre_colour = random_colour(rng, value=(50, 100))
+
+        # Berries: not every plant makes them
+        self.makes_berries = rng.random() < 0.75
+        self.berry_size = rng.randint(4, 12)
+        self.ripe_colour = random_colour(rng, saturation=(60, 100), value=(40, 90))
+
+    def new_leaf(self):
+        return Leaf(full_size=self.leaf_size, width=self.leaf_width,
+                    leaflets=self.leaflets, colour=self.leaf_colour)
+
+    def new_flower(self):
+        return Flower(size=self.flower_size, petals=self.petals, petal_colour=self.petal_colour,
+                      centre_colour=self.centre_colour, open_steps=self.flower_open_steps)
+
+    def new_berry(self):
+        return Berry(full_size=self.berry_size, ripe_colour=self.ripe_colour)
+
+    def grow(self, step):
+        super().grow(step)
+        self.stem.height = self.stem_height * progress(step, 1, self.max_steps - 1)
+        self.stem.thickness = 2 + step // 2
+        self.stem.branches = min(self.max_branches, max(0, step - 2))
+        self.stem.woody = self.woody and step >= self.max_steps // 2
+        # A random number of new leaves each step.
+        if step >= 2 and len(self.leaves) < self.max_leaves:
+            self.add_leaves(self.rng.randint(1, self.max_new_leaves))
+        if step == self.flower_step:
+            self.add_flowers(self.flower_count)
+        if self.makes_berries:
+            self.flowers_become_berries()
+
+
 # The plants the user can choose from. Add a new class here and it appears in the menu.
-PLANT_TYPES = [Sunflower, Tomato, CherryTomato, Strawberry, BlueberryBush]
+PLANT_TYPES = [Sunflower, Tomato, CherryTomato, Strawberry, BlueberryBush, RandomisedPlant]

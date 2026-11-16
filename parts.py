@@ -161,7 +161,7 @@ class Stem(PlantPart):
         kind = "woody" if self.woody else "green"
         text = f"{kind}, {self.height:.0f} px tall"
         if self.branches:
-            text += f", {self.branches} branches"
+            text += f", {self.branches} branch" + ("" if self.branches == 1 else "es")
         return text
 
     def segments(self, base):

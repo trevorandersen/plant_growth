@@ -105,7 +105,7 @@ class App:
                               for i, cls in enumerate(PLANT_TYPES)]
         grow_top = self.plant_buttons[-1].rect.bottom + 45
         self.grow_button = Button((20, grow_top, PANEL_WIDTH - 40, 54), "Grow one step")
-        self.reset_button = Button((20, grow_top + 64, PANEL_WIDTH - 40, 36), "Start again from seed")
+        self.reset_button = Button((20, grow_top + 64, PANEL_WIDTH - 40, 36), "Plant a new seed")
         self.select(0)
 
     # ------------------------------------------------------------- actions
@@ -191,7 +191,7 @@ class App:
             y += 20
 
         self.text("Keys: Space = grow, R = restart,", (20, HEIGHT - 46), self.small_font, MUTED)
-        self.text("1-5 = choose a plant", (20, HEIGHT - 28), self.small_font, MUTED)
+        self.text(f"1-{len(PLANT_TYPES)} = choose a plant", (20, HEIGHT - 28), self.small_font, MUTED)
 
     def draw_info_panel(self):
         plant = self.plant
